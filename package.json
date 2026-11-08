@@ -12,6 +12,7 @@
     "vite": "^8.3.6"
   },
   "dependencies": {
+    "jszip": "^3.10.2",
     "konva": "^10.9.1"
   }
 }
