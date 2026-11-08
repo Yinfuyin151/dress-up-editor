@@ -2,6 +2,17 @@
 import Konva from "konva";
 import "./style.css";
 
+import JSZip from "jszip";
+
+import {
+  saveProject,
+  loadProject,
+  saveImage,
+  loadImageBlob,
+  deleteImage,
+} from "./storage.js";
+
+
 const W = 1024;
 const H = 1536;
 
@@ -22,6 +33,46 @@ const equipped = {};
 
 let selectedId = null;
 let nextId = 2;
+
+
+let restoring = false;
+let saveTimer = null;
+let saveQueue = Promise.resolve();
+
+function projectSnapshot() {
+  return {
+    version: 3,
+    canvas: { width: W, height: H },
+    character: "/assets/character_base.png",
+    selectedId,
+    nextId,
+    assets: assets.map(serialize),
+  };
+}
+
+function requestSave() {
+  if (restoring) return;
+
+  clearTimeout(saveTimer);
+
+  $("save-status").textContent = "有未保存的更改...";
+
+  saveTimer = setTimeout(() => {
+    const snapshot = projectSnapshot();
+
+    saveQueue = saveQueue
+      .catch(() => {})
+      .then(() => saveProject(snapshot));
+
+    saveQueue.then(() => {
+      $("save-status").textContent = "已自动保存";
+    }).catch((error) => {
+      console.error(error);
+      $("save-status").textContent = "保存失败，请导出 ZIP 备份";
+    });
+  }, 500);
+}
+
 
 const stage = new Konva.Stage({
   container: "stage-container",
@@ -288,6 +339,8 @@ async function addAsset({
     updateProperties
   );
 
+  node.on("dragend transformend", requestSave);
+
   if (config?.equipped || !equipped[category]) {
     equipped[category] = id;
   }
@@ -312,6 +365,8 @@ function selectAsset(id) {
   refreshVisibility();
   renderAssetList();
   updateProperties();
+
+  requestSave();
 }
 
 // 关闭或打开某一件衣服
@@ -329,6 +384,8 @@ function toggleAsset(id) {
   refreshVisibility();
   renderAssetList();
   updateProperties();
+
+  requestSave();
 }
 
 // 删除素材
@@ -351,6 +408,8 @@ function deleteAsset(id) {
   refreshVisibility();
   renderAssetList();
   updateProperties();
+
+  requestSave();
 }
 
 // 左侧素材列表
@@ -470,6 +529,8 @@ function applyProperties() {
   transformer.forceUpdate();
   sortLayers();
   updateProperties();
+
+  requestSave();
 }
 
 for (const id of [
@@ -487,6 +548,7 @@ $("visible").addEventListener("change", (event) => {
   refreshVisibility();
   renderAssetList();
   updateProperties();
+  requestSave();
 });
 
 $("category").addEventListener(
@@ -543,6 +605,7 @@ $("reset").addEventListener("click", () => {
 
   transformer.forceUpdate();
   updateProperties();
+  requestSave();
 });
 
 // 导出 JSON 文件

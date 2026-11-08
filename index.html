@@ -90,6 +90,25 @@
         <button id="reset">恢复原始位置</button>
         <button id="export">导出 JSON 配置</button>
 
+        <button id="export-zip">
+          导出完整素材包 ZIP
+        </button>
+
+        <label class="upload-button secondary">
+          导入完整素材包 ZIP
+          <input
+            id="import-zip"
+            type="file"
+            accept=".zip,application/zip"
+            hidden
+          />
+        </label>
+
+        <p class="hint" id="save-status">
+          自动保存尚未启动
+        </p>
+
+
         <label class="upload-button secondary">
           导入 JSON 配置
           <input id="import-json" type="file"
