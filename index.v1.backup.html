@@ -1,0 +1,44 @@
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>换装素材编辑器</title>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <h1>换装素材编辑器</h1>
+        <p>Konva.js · 人物母版与服装对齐</p>
+      </header>
+
+      <main>
+        <section class="preview-panel">
+          <h2>人物预览</h2>
+          <div id="stage-container"></div>
+        </section>
+
+        <aside class="control-panel">
+          <h2>服饰编辑</h2>
+          <p>当前服饰：粉色 T 恤</p>
+
+          <div class="buttons">
+            <button id="reset">恢复原始位置</button>
+            <button id="export">导出 JSON</button>
+          </div>
+
+          <h3>当前参数</h3>
+          <pre id="properties"></pre>
+
+          <p class="tip">
+            使用鼠标拖动衣服调整位置，
+            拖动控制点缩放或旋转。
+          </p>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

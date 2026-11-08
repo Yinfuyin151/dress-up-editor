@@ -1,0 +1,184 @@
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #faf2f7;
+  color: #453b45;
+  font-family: -apple-system, BlinkMacSystemFont,
+               "Segoe UI", sans-serif;
+}
+
+.app {
+  max-width: 1500px;
+  margin: auto;
+  padding: 20px;
+}
+
+header {
+  margin-bottom: 20px;
+}
+
+h1 {
+  margin: 0;
+  color: #b66d98;
+}
+
+header p,
+.hint {
+  color: #8b7d89;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+
+.panel {
+  min-width: 0;
+  padding: 16px;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 3px 18px #00000009;
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 17px;
+}
+
+label {
+  display: block;
+  margin: 10px 0 5px;
+  font-size: 13px;
+}
+
+select,
+input[type="number"] {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid #e6d6e0;
+  border-radius: 7px;
+  background: white;
+  color: #453b45;
+}
+
+button,
+.upload-button {
+  display: block;
+  width: 100%;
+  padding: 11px;
+  margin: 10px 0;
+  border: 0;
+  border-radius: 8px;
+  background: #d783af;
+  color: white;
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+}
+
+button:hover,
+.upload-button:hover {
+  background: #bd6798;
+}
+
+.upload-button.secondary {
+  background: #927ca4;
+}
+
+.preview {
+  text-align: center;
+}
+
+#stage-container {
+  width: 100%;
+  max-width: 490px;
+  margin: auto;
+  border: 1px solid #ddd0dc;
+  overflow: hidden;
+  background-color: white;
+  background-image:
+    conic-gradient(#ece8eb 25%, white 0 50%,
+                   #ece8eb 0 75%, white 0);
+  background-size: 20px 20px;
+}
+
+.asset-item {
+  padding: 10px;
+  margin: 8px 0;
+  border: 1px solid #eadce6;
+  border-radius: 8px;
+}
+
+.asset-item.active {
+  border-color: #d783af;
+  background: #fff3f9;
+}
+
+.asset-name {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: #453b45;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.asset-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.asset-actions button {
+  flex: 1;
+  margin: 4px 0 0;
+  padding: 7px;
+}
+
+.asset-actions .danger {
+  background: #998a99;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.fields {
+  margin-top: 12px;
+}
+
+.fields input {
+  margin-top: 5px;
+}
+
+pre {
+  padding: 10px;
+  background: #faf4f8;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+#status {
+  color: #9b6e8c;
+  font-size: 13px;
+}
+
+@media (max-width: 950px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

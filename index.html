@@ -1,0 +1,106 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0" />
+  <title>换装素材编辑器 V2</title>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>换装素材编辑器 V2.0</h1>
+      <p>AI 素材 → Krita 精修 → Konva 精确摆位</p>
+    </header>
+
+    <main class="layout">
+      <!-- 左侧：素材衣柜 -->
+      <aside class="panel">
+        <h2>素材衣柜</h2>
+
+        <label for="category">当前分类</label>
+        <select id="category">
+          <option value="hair">发型</option>
+          <option value="tops" selected>上衣</option>
+          <option value="skirts">裙子</option>
+          <option value="shoes">鞋子</option>
+          <option value="accessories">配饰</option>
+        </select>
+
+        <label class="upload-button">
+          + 导入服饰 PNG
+          <input id="upload" type="file"
+                 accept="image/png" multiple hidden />
+        </label>
+
+        <p class="hint">
+          同一分类只能穿一件；
+          点击素材名称可切换穿搭。
+        </p>
+
+        <div id="asset-list"></div>
+      </aside>
+
+      <!-- 中间：人物 -->
+      <section class="panel preview">
+        <h2>实时预览</h2>
+        <div id="stage-container"></div>
+        <p id="status">正在加载素材...</p>
+        <p class="hint">
+          点击衣服可选中，拖动调整位置；
+          使用控制点缩放、旋转。
+        </p>
+      </section>
+
+      <!-- 右侧：参数 -->
+      <aside class="panel">
+        <h2>图层属性</h2>
+
+        <div id="selection-name">未选择素材</div>
+
+        <label class="check">
+          <input id="visible" type="checkbox" checked />
+          显示当前服饰
+        </label>
+
+        <div class="fields">
+          <label>X 坐标
+            <input id="pos-x" type="number" step="1" />
+          </label>
+          <label>Y 坐标
+            <input id="pos-y" type="number" step="1" />
+          </label>
+          <label>横向缩放
+            <input id="scale-x" type="number"
+                   step="0.01" min="0.01" />
+          </label>
+          <label>纵向缩放
+            <input id="scale-y" type="number"
+                   step="0.01" min="0.01" />
+          </label>
+          <label>旋转角度
+            <input id="rotation" type="number" step="1" />
+          </label>
+          <label>图层顺序
+            <input id="layer-order" type="number" step="1" />
+          </label>
+        </div>
+
+        <button id="reset">恢复原始位置</button>
+        <button id="export">导出 JSON 配置</button>
+
+        <label class="upload-button secondary">
+          导入 JSON 配置
+          <input id="import-json" type="file"
+                 accept=".json,application/json" hidden />
+        </label>
+
+        <pre id="properties"></pre>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
