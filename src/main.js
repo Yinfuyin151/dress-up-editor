@@ -9,7 +9,7 @@ import {
   loadProject,
   saveImage,
   loadImageBlob,
-  deleteImage,
+  saveBundle,
 } from "./storage.js";
 
 
@@ -35,7 +35,9 @@ let selectedId = null;
 let nextId = 2;
 
 
-let restoring = false;
+let restoring = true;
+let characterPath = "/assets/character_base.png";
+let characterBlob = null;
 let saveTimer = null;
 let saveQueue = Promise.resolve();
 
@@ -43,7 +45,7 @@ function projectSnapshot() {
   return {
     version: 3,
     canvas: { width: W, height: H },
-    character: "/assets/character_base.png",
+    character: characterPath,
     selectedId,
     nextId,
     assets: assets.map(serialize),
@@ -341,11 +343,11 @@ async function addAsset({
 
   node.on("dragend transformend", requestSave);
 
-  if (config?.equipped || !equipped[category]) {
+  if (config?.equipped === true || (!config && !equipped[category])) {
     equipped[category] = id;
   }
 
-  selectAsset(id);
+  if (!config) selectAsset(id);
   renderAssetList();
   refreshVisibility();
 }
@@ -570,6 +572,7 @@ $("upload").addEventListener("change", async (event) => {
     const url = URL.createObjectURL(file);
 
     try {
+      await saveImage(id, file);
       await addAsset({
         id,
         name: file.name.replace(/\.png$/i, ""),
@@ -577,7 +580,7 @@ $("upload").addEventListener("change", async (event) => {
         src: url,
 
         // 导出配置时使用的预期部署路径
-        path: "/assets/imported/" + file.name,
+        path: "/assets/imported/" + id + ".png",
       });
       $("status").textContent = "已导入：" + file.name;
     } catch (error) {
@@ -613,7 +616,7 @@ $("export").addEventListener("click", () => {
   const config = {
     version: 2,
     canvas: { width: W, height: H },
-    character: "/assets/character_base.png",
+    character: characterPath,
     assets: assets.map(serialize),
   };
 
@@ -644,56 +647,7 @@ $("import-json").addEventListener(
     try {
       const config = JSON.parse(await file.text());
 
-      if (
-        config.version !== 2 ||
-        config.canvas?.width !== W ||
-        config.canvas?.height !== H ||
-        !Array.isArray(config.assets)
-      ) {
-        throw new Error("配置格式或画布尺寸不正确");
-      }
-
-      // 在加载新配置前先清理旧素材
-      transformer.nodes([]);
-      for (const asset of assets) {
-        asset.node.destroy();
-      }
-
-      assets.length = 0;
-      selectedId = null;
-
-      for (const key of Object.keys(equipped)) {
-        delete equipped[key];
-      }
-
-      for (const saved of config.assets) {
-        await addAsset({
-          id: saved.id,
-          name: saved.name,
-          category: saved.category,
-          src: saved.image,
-          path: saved.image,
-          config: saved,
-        });
-      }
-
-      // 恢复每一类实际选中的服饰
-      for (const category of Object.keys(CATEGORIES)) {
-        const active = config.assets.find(
-          (a) => a.category === category &&
-                 a.equipped
-        );
-
-        if (active) {
-          equipped[category] = active.id;
-        } else {
-          delete equipped[category];
-        }
-      }
-
-      refreshVisibility();
-      renderAssetList();
-      updateProperties();
+      await restoreProject(config);
       $("status").textContent = "配置导入成功";
     } catch (error) {
       alert("导入失败：" + error.message);
@@ -716,45 +670,180 @@ function fitStage() {
   stage.scale({ x: scale, y: scale });
 }
 
-// 初始化
-async function initialize() {
-  try {
-    const bodyImage = await loadImage(
-      "/assets/character_base.png"
-    );
+// Resolve original PNG bytes, never a temporary object URL or cropped canvas.
+async function fetchBlob(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error("素材读取失败：" + path);
+  return response.blob();
+}
 
+async function imageFromBlob(blob) {
+  const url = URL.createObjectURL(blob);
+  try { return await loadImage(url); }
+  finally { URL.revokeObjectURL(url); }
+}
+
+function validateProject(config) {
+  if (![2, 3].includes(config.version) ||
+      config.canvas?.width !== W || config.canvas?.height !== H ||
+      !Array.isArray(config.assets)) throw new Error("配置格式或画布尺寸不正确");
+  const ids = new Set();
+  for (const asset of config.assets) {
+    if (typeof asset.id !== "string" || ids.has(asset.id) ||
+        !Object.hasOwn(CATEGORIES, asset.category) ||
+        typeof asset.image !== "string" ||
+        ![asset.x, asset.y, asset.scaleX, asset.scaleY, asset.rotation].every(Number.isFinite)) {
+      throw new Error("素材配置无效或 ID 重复");
+    }
+    ids.add(asset.id);
+  }
+}
+
+async function restoreProject(config, zip = null, persist = true) {
+  validateProject(config);
+  const wasRestoring = restoring;
+  const pendingSave = !wasRestoring && $("save-status").textContent === "有未保存的更改...";
+  const controls = [...document.querySelectorAll("input, button, select")];
+  const disabled = controls.map(control => control.disabled);
+  controls.forEach(control => control.disabled = true);
+  restoring = true;
+  clearTimeout(saveTimer);
+  try {
+    await saveQueue.catch(() => {});
+    const read = async (path, id) => {
+      if (zip) {
+        const entry = zip.file(path.replace(/^\//, ""));
+        if (!entry) throw new Error("ZIP 缺少素材：" + path);
+        return new Blob([await entry.async("uint8array")], { type: "image/png" });
+      }
+      return (await loadImageBlob(id)) ?? fetchBlob(path);
+    };
+    const bodyPath = config.character || "/assets/character_base.png";
+    const bodyBlob = await read(bodyPath, "__character__");
+    const bodyImage = await imageFromBlob(bodyBlob);
     if (bodyImage.width !== W || bodyImage.height !== H) {
       throw new Error("人物母版必须为 1024×1536");
     }
+    // Validate every image before replacing the current scene or saved project.
+    const prepared = [];
+    for (const saved of config.assets) {
+      const blob = await read(saved.image, saved.id);
+      findAlphaBounds(await imageFromBlob(blob));
+      prepared.push({ saved, blob });
+    }
+    if (persist) await saveBundle(config, [
+      ["__character__", bodyBlob], ...prepared.map(({ saved, blob }) => [saved.id, blob]),
+    ]);
+    transformer.nodes([]);
+    for (const asset of assets) asset.node.destroy();
+    assets.length = 0;
+    for (const key of Object.keys(equipped)) delete equipped[key];
+    selectedId = null;
+    characterPath = bodyPath;
+    characterBlob = bodyBlob;
+    bodyLayer.destroyChildren();
+    bodyLayer.add(new Konva.Image({ image: bodyImage, x: 0, y: 0,
+      width: W, height: H, listening: false }));
+    for (const { saved, blob } of prepared) {
+      const url = URL.createObjectURL(blob);
+      try {
+        await addAsset({ id: saved.id, name: saved.name, category: saved.category,
+          src: url, path: saved.image, config: saved });
+      } finally { URL.revokeObjectURL(url); }
+    }
+    selectedId = getAsset(config.selectedId) ? config.selectedId : (assets[0]?.id ?? null);
+    if (currentAsset()) $("category").value = currentAsset().category;
+    nextId = Math.max(2, Number(config.nextId) || 2,
+      ...assets.map(a => Number(/^asset_(\d+)$/.exec(a.id)?.[1] || 0) + 1));
+    refreshVisibility();
+    renderAssetList();
+    updateProperties();
+    bodyLayer.batchDraw();
+    $("save-status").textContent = "已恢复项目";
+  } finally {
+    restoring = wasRestoring;
+    controls.forEach((control, i) => control.disabled = disabled[i]);
+    if (!restoring) {
+      updateProperties();
+      if (pendingSave) requestSave();
+    }
+  }
+}
 
-    const body = new Konva.Image({
-      image: bodyImage,
-      x: 0,
-      y: 0,
-      width: W,
-      height: H,
-      listening: false,
-    });
+$("export-zip").addEventListener("click", async () => {
+  try {
+    const config = projectSnapshot();
+    const zip = new JSZip();
+    config.character = "/assets/character_base.png";
+    const bodyBlob = characterBlob ?? await fetchBlob(characterPath);
+    zip.file("assets/character_base.png", await bodyBlob.arrayBuffer());
+    for (let i = 0; i < config.assets.length; i++) {
+      const saved = config.assets[i];
+      const blob = (await loadImageBlob(saved.id)) ?? await fetchBlob(saved.image);
+      saved.image = `/assets/imported/image_${i}.png`;
+      zip.file(saved.image.slice(1), await blob.arrayBuffer());
+    }
+    zip.file("wardrobe.json", JSON.stringify(config, null, 2));
+    const url = URL.createObjectURL(await zip.generateAsync({ type: "blob" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "wardrobe.zip";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $("status").textContent = "完整素材包已导出";
+  } catch (error) { alert("导出失败：" + error.message); }
+});
 
-    bodyLayer.add(body);
-
-    await addAsset({
-      id: "top_001",
-      name: "粉色 T 恤",
-      category: "tops",
-      src: "/assets/tops/top_001.png",
-      path: "/assets/tops/top_001.png",
-    });
-
+$("import-zip").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    const entry = zip.file("wardrobe.json");
+    if (!entry) throw new Error("ZIP 缺少 wardrobe.json");
+    await restoreProject(JSON.parse(await entry.async("string")), zip);
+    restoring = false;
+    document.querySelectorAll("input, button, select").forEach(control => control.disabled = false);
+    updateProperties();
     fitStage();
-    $("status").textContent = "编辑器已就绪";
+    $("status").textContent = "完整素材包导入成功";
+  } catch (error) { alert("导入失败：" + error.message); }
+  finally { event.target.value = ""; }
+});
+
+// 初始化：先恢复项目，绝不以默认服饰覆盖现有存档。
+async function initialize() {
+  const controls = [...document.querySelectorAll("input, button, select")];
+  controls.forEach(control => control.disabled = true);
+  try {
+    const saved = await loadProject();
+    if (saved) {
+      await restoreProject(saved, null, false);
+    } else {
+      characterBlob = await fetchBlob(characterPath);
+      const bodyImage = await imageFromBlob(characterBlob);
+      if (bodyImage.width !== W || bodyImage.height !== H) throw new Error("人物母版必须为 1024×1536");
+      bodyLayer.add(new Konva.Image({ image: bodyImage, x: 0, y: 0,
+        width: W, height: H, listening: false }));
+      await addAsset({ id: "top_001", name: "粉色 T 恤", category: "tops",
+        src: "/assets/tops/top_001.png", path: "/assets/tops/top_001.png" });
+    }
+    restoring = false;
+    controls.forEach(control => control.disabled = false);
+    updateProperties();
+    fitStage();
+    $("status").textContent = "编辑器 V3.0 已就绪";
+    requestSave();
   } catch (error) {
     console.error(error);
-    $("status").textContent = error.message;
+    $("status").textContent = "恢复失败（存档已保留）：" + error.message;
+    // Allow recovery via a complete archive even if an old image is missing.
+    $("import-zip").disabled = false;
   }
 }
 
 window.addEventListener("resize", fitStage);
-
 updateProperties();
 initialize();

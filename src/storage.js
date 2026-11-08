@@ -28,7 +28,7 @@ export async function getData(key) {
     req.onsuccess = () => resolve(req.result ?? null);
     req.onerror = () => reject(req.error);
     tx.oncomplete = () => db.close();
-    tx.onerror = () => reject(tx.error);
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error); };
   });
 }
 
@@ -43,7 +43,7 @@ export async function setData(key, value) {
       db.close();
       resolve();
     };
-    tx.onerror = () => {
+    tx.onabort = tx.onerror = () => {
       db.close();
       reject(tx.error);
     };
@@ -61,7 +61,7 @@ export async function deleteData(key) {
       db.close();
       resolve();
     };
-    tx.onerror = () => {
+    tx.onabort = tx.onerror = () => {
       db.close();
       reject(tx.error);
     };
@@ -82,3 +82,16 @@ export const loadImageBlob = (id) =>
 
 export const deleteImage = (id) =>
   deleteData(`image:${id}`);
+
+// Commit image bytes and their manifest together when importing a project.
+export async function saveBundle(project, images) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    store.put(project, "project");
+    for (const [id, blob] of images) store.put(blob, `image:${id}`);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error || new Error("保存事务中止")); };
+  });
+}
